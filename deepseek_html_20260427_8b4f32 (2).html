@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+    <meta name="description" content="台北捷運路線圖｜中英文雙語｜票價查詢｜最短路徑計算">
+    <title>Taipei MRT Map · 台北捷運雙語地圖</title>
+    <style>
+        * { box-sizing: border-box; user-select: none; }
+        :root {
+            --BL: #0070BD; --R: #E3002C; --G: #008659; --O: #F8B61C; --BR: #9E652E; --Y: #FFDB00;
+        }
+        body {
+            font-family: 'Segoe UI', 'Microsoft JhengHei', sans-serif;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            background: #eef2f5;
+            overflow: hidden;
+        }
+        /* 左側地圖區 */
+        #map-container {
+            flex: 7.2;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            border-radius: 28px 0 0 28px;
+            margin: 12px 0 12px 12px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+        .map-header {
+            padding: 14px 24px;
+            background: white;
+            border-bottom: 1px solid #e9edf2;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .title-area h2 {
+            margin: 0;
+            color: var(--BL);
+            font-size: 1.5rem;
+        }
+        .title-area p {
+            margin: 4px 0 0;
+            font-size: 0.7rem;
+            color: #5b6e8c;
+        }
+        .lang-switch {
+            background: #f0f4f9;
+            border-radius: 40px;
+            padding: 4px;
+            display: flex;
+            gap: 6px;
+        }
+        .lang-btn {
+            border: none;
+            background: transparent;
+            padding: 5px 18px;
+            border-radius: 32px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            font-size: 0.85rem;
+        }
+        .lang-btn.active {
+            background: var(--BL);
+            color: white;
+        }
+        .svg-wrapper {
+            flex: 1;
+            background: #fdfdfd;
+            overflow: auto;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #mrt-svg {
+            width: 100%;
+            height: 100%;
+            cursor: grab;
+            min-width: 600px;
+        }
+        .route-line { fill: none; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; }
+        .station-dot { cursor: pointer; transition: 0.1s; stroke: white; stroke-width: 1.2; }
+        .station-dot:hover { r: 5; fill: #ff8c42 !important; }
+        .station-label {
+            font-size: 4.2px;
+            font-weight: 600;
+            pointer-events: none;
+            fill: #1e2f3e;
+            text-shadow: 0.6px 0.6px 0 #fff, -0.4px -0.4px 0 #fff;
+            transition: 0.1s;
+        }
+        /* 右側面板 */
+        #control-panel {
+            flex: 2.8;
+            padding: 20px 24px;
+            background: white;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            border-radius: 0 28px 28px 0;
+            margin: 12px 12px 12px 0;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+        }
+        .section-title {
+            font-size: 1.1rem;
+            margin: 0 0 12px 0;
+            border-left: 5px solid var(--BL);
+            padding-left: 12px;
+            font-weight: 600;
+            color: #1f2d3d;
+        }
+        .input-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .input-group label {
+            font-weight: 600;
+            min-width: 42px;
+        }
+        .input-group input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #dce3ec;
+            border-radius: 28px;
+            background: #fefefe;
+            font-size: 0.9rem;
+        }
+        .swap-btn {
+            background: #f0f4fa;
+            border: none;
+            font-size: 1.3rem;
+            width: 42px;
+            height: 42px;
+            border-radius: 42px;
+            cursor: pointer;
+            transition: 0.2s;
+            font-weight: bold;
+            color: var(--BL);
+        }
+        .swap-btn:hover {
+            background: var(--BL);
+            color: white;
+            transform: rotate(180deg);
+        }
+        select {
+            width: 100%;
+            padding: 10px 14px;
+            border-radius: 28px;
+            border: 1px solid #dce3ec;
+            background: white;
+            margin: 5px 0 12px;
+        }
+        .fare-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+            margin: 12px 0;
+        }
+        .fare-card {
+            background: linear-gradient(135deg, #008659, #006e48);
+            border-radius: 24px;
+            padding: 14px;
+            color: white;
+            text-align: center;
+        }
+        .fare-card.discount { background: linear-gradient(135deg, #E3002C, #b81a2f); }
+        .fare-card.time { grid-column: span 2; background: linear-gradient(135deg, #2c3e4e, #1e2a3a); }
+        .fare-value {
+            font-size: 28px;
+            font-weight: 800;
+            margin-top: 5px;
+        }
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #f9fbfd;
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        .info-table th, .info-table td {
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid #e9edf2;
+        }
+        .info-table th { background: #eef2f7; font-weight: 600; }
+        .legend {
+            display: flex;
+            gap: 16px;
+            font-size: 10px;
+            margin-top: 8px;
+            justify-content: center;
+        }
+        .legend span::before {
+            content: "●";
+            margin-right: 5px;
+            font-size: 12px;
+        }
+        .legend .blue::before { color: #0070BD; content: "●"; }
+        .legend .red::before { color: #E3002C; }
+        footer {
+            font-size: 10px;
+            text-align: center;
+            color: #8a9bb0;
+            margin-top: 12px;
+        }
+        @media (max-width: 700px) {
+            body { flex-direction: column; }
+            #map-container { flex: 1; margin: 8px; border-radius: 20px; }
+            #control-panel { flex: 1; margin: 0 8px 8px 8px; border-radius: 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<div id="map-container">
+    <div class="map-header">
+        <div class="title-area">
+            <h2 id="map-title">台北捷運路線圖</h2>
+            <p id="map-sub">🖱️ 左鍵起點 · 右鍵終點</p>
+        </div>
+        <div class="lang-switch">
+            <button class="lang-btn active" data-lang="zh" id="btn-zh">中文</button>
+            <button class="lang-btn" data-lang="en" id="btn-en">English</button>
+        </div>
+    </div>
+    <div class="svg-wrapper">
+        <svg id="mrt-svg" viewBox="-10 -10 270 280"></svg>
+    </div>
+    <div class="legend">
+        <span class="blue">起點站</span>
+        <span class="red">終點站</span>
+        <span style="color:#ff8c42;">● 滑鼠懸停</span>
+    </div>
+</div>
+
+<div id="control-panel">
+    <div>
+        <div class="section-title" id="station-title">📍 站點設定</div>
+        <div class="input-group">
+            <label id="start-label">🚉 起站</label>
+            <input type="text" id="start-search" list="all-stations" placeholder="站名 / Station">
+        </div>
+        <div class="input-group">
+            <label id="dest-label">🏁 迄站</label>
+            <input type="text" id="dest-search" list="all-stations" placeholder="站名 / Station">
+            <button class="swap-btn" id="swap-btn">⇄</button>
+        </div>
+        <select id="line-select">
+            <option value="" id="line-default">-- 依路線篩選目的地 --</option>
+            <option value="BL">板南線</option><option value="R">淡水信義線</option>
+            <option value="G">松山新店線</option><option value="O">中和新蘆線</option>
+            <option value="BR">文湖線</option><option value="Y">環狀線</option>
+        </select>
+        <select id="dest-select">
+            <option value="" id="dest-placeholder">-- 請先選路線 --</option>
+        </select>
+        <datalist id="all-stations"></datalist>
+    </div>
+
+    <div>
+        <div class="section-title" id="fare-title">💰 票價 & 乘車資訊</div>
+        <div class="fare-grid">
+            <div class="fare-card"><div id="full-label">全票票價</div><div class="fare-value" id="val-full">--</div></div>
+            <div class="fare-card discount"><div id="disc-label">優待票價</div><div class="fare-value" id="val-disc">--</div></div>
+            <div class="fare-card time"><div id="time-label">預估乘車時間</div><div class="fare-value" id="val-time">-- <small>min</small></div></div>
+        </div>
+    </div>
+
+    <div>
+        <div class="section-title" id="detail-title">📐 路徑詳情</div>
+        <table class="info-table">
+            <tr><th id="dist-th">實際路線距離</th><td><b id="val-dist">--</b> <span id="dist-unit">公里</span></td></tr>
+            <tr><th id="start-th">起點站</th><td id="info-start">未選擇</td></tr>
+            <tr><th id="dest-th">終點站</th><td id="info-dest">未選擇</td></tr>
+        </table>
+    </div>
+    <footer id="footer-text">💡 點擊地圖圓點：左鍵起點／右鍵終點 | 自動最短路徑</footer>
+</div>
+
+<script>
+    // --------------------------------------------------------------
+    // 台北捷運完整路線與座標 (2025 版)
+    // --------------------------------------------------------------
+    const mrtLines = {
+        "BL": { name: "板南線", color: "#0070BD", stations: ["頂埔","永寧","土城","海山","亞東醫院","府中","板橋","新埔","江子翠","龍山寺","西門","台北車站","善導寺","忠孝新生","忠孝復興","忠孝敦化","國父紀念館","市政府","永春","後山埤","昆陽","南港","南港展覽館"] },
+        "R": { name: "淡水信義線", color: "#E3002C", stations: ["淡水","紅樹林","竹圍","關渡","忠義","復興崗","北投","奇岩","唭哩岸","石牌","明德","芝山","士林","劍潭","圓山","民權西路","雙連","中山","台北車站","台大醫院","中正紀念堂","東門","大安森林公園","大安","信義安和","台北101/世貿","象山"] },
+        "G": { name: "松山新店線", color: "#008659", stations: ["新店","新店區公所","七張","大坪林","景美","萬隆","公館","台電大樓","古亭","中正紀念堂","小南門","西門","北門","中山","松江南京","南京復興","台北小巨蛋","南京三民","松山"] },
+        "O": { name: "中和新蘆線", color: "#F8B61C", stations: ["南勢角","景安","永安市場","頂溪","古亭","東門","忠孝新生","松江南京","行天宮","中山國小","民權西路","大橋頭","台北橋","菜寮","三重","先嗇宮","頭前庄","新莊","輔大","丹鳳","迴龍"] },
+        "O_branch": { name: "中和新蘆線(支線)", color: "#F8B61C", stations: ["大橋頭","三重國小","三和國中","徐匯中學","三民高中","蘆洲"], isBranch: true },
+        "BR": { name: "文湖線", color: "#9E652E", stations: ["動物園","木柵","萬芳社區","萬芳醫院","辛亥","麟光","六張犁","科技大樓","大安","忠孝復興","南京復興","中山國中","松山機場","大直","劍南路","西湖","港墘","文德","內湖","大湖公園","葫洲","東湖","南港軟體園區","南港展覽館"] },
+        "Y": { name: "環狀線", color: "#FFDB00", stations: ["大坪林","十四張","秀朗橋","景平","景安","橋和","中原","板新","板橋","新埔民生","頭前庄","幸福","新北產業園區"] }
+    };
+    const coords = {
+        "淡水":[20,10],"紅樹林":[30,10],"竹圍":[40,10],"關渡":[50,10],"忠義":[60,10],"復興崗":[70,10],"北投":[80,10],"奇岩":[90,10],"唭哩岸":[100,10],"石牌":[110,20],"明德":[120,30],"芝山":[120,40],"士林":[120,50],"劍潭":[120,60],"圓山":[120,70],"民權西路":[120,80],"雙連":[120,90],"中山":[120,100],"台北車站":[120,120],"台大醫院":[120,130],"中正紀念堂":[120,140],"東門":[136,140],"大安森林公園":[148,140],"大安":[160,140],"信義安和":[175,140],"台北101/世貿":[190,140],"象山":[205,140],
+        "頂埔":[10,190],"永寧":[20,180],"土城":[30,170],"海山":[40,160],"亞東醫院":[50,150],"府中":[55,145],"板橋":[60,140],"新埔":[70,135],"江子翠":[80,130],"龍山寺":[90,130],"西門":[100,130],"善導寺":[128,120],"忠孝新生":[136,120],"忠孝復興":[160,120],"忠孝敦化":[172,120],"國父紀念館":[184,120],"市政府":[196,120],"永春":[208,120],"後山埤":[216,120],"昆陽":[224,120],"南港":[232,120],"南港展覽館":[240,120],
+        "新店":[155,250],"新店區公所":[150,240],"七張":[145,230],"大坪林":[140,210],"景美":[135,195],"萬隆":[130,180],"公館":[125,170],"台電大樓":[120,163],"古亭":[120,156],"小南門":[110,135],"北門":[110,115],"松江南京":[136,100],"南京復興":[160,100],"台北小巨蛋":[175,100],"南京三民":[190,100],"松山":[205,100],
+        "南勢角":[100,220],"景安":[100,200],"永安市場":[106,185],"頂溪":[112,170],"行天宮":[136,90],"中山國小":[128,80],"大橋頭":[100,80],"台北橋":[95,85],"菜寮":[85,90],"三重":[75,90],"先嗇宮":[67,90],"頭前庄":[60,90],"新莊":[50,90],"輔大":[40,90],"丹鳳":[30,90],"迴龍":[20,90],
+        "三重國小":[90,70],"三和國中":[80,60],"徐匯中學":[70,50],"三民高中":[60,40],"蘆洲":[50,30],
+        "動物園":[200,220],"木柵":[200,210],"萬芳社區":[200,200],"萬芳醫院":[190,190],"辛亥":[180,180],"麟光":[170,170],"六張犁":[160,160],"科技大樓":[160,150],"中山國中":[160,85],"松山機場":[160,70],"大直":[170,60],"劍南路":[180,60],"西湖":[190,60],"港墘":[200,60],"文德":[210,60],"內湖":[220,60],"大湖公園":[230,60],"葫洲":[240,70],"東湖":[240,85],"南港軟體園區":[240,100],
+        "十四張":[128,200],"秀朗橋":[116,200],"景平":[108,200],"橋和":[88,175],"中原":[76,160],"板新":[68,150],"新埔民生":[60,115],"幸福":[55,75],"新北產業園區":[50,60]
+    };
+    // 英文站名對照 (台北捷運官方名稱)
+    const stationEn = {
+        "頂埔":"Dingpu","永寧":"Yongning","土城":"Tucheng","海山":"Haishan","亞東醫院":"Far Eastern Hospital","府中":"Fuzhong","板橋":"Banqiao","新埔":"Xinpu","江子翠":"Jiangzicui","龍山寺":"Longshan Temple","西門":"Ximen","台北車站":"Taipei Main Station","善導寺":"Shandao Temple","忠孝新生":"Zhongxiao Xinsheng","忠孝復興":"Zhongxiao Fuxing","忠孝敦化":"Zhongxiao Dunhua","國父紀念館":"Sun Yat-Sen Memorial Hall","市政府":"Taipei City Hall","永春":"Yongchun","後山埤":"Houshanpi","昆陽":"Kunyang","南港":"Nangang","南港展覽館":"Nangang Exhibition Center",
+        "淡水":"Tamsui","紅樹林":"Hongshulin","竹圍":"Zhuwei","關渡":"Guandu","忠義":"Zhongyi","復興崗":"Fuxinggang","北投":"Beitou","奇岩":"Qiyan","唭哩岸":"Qilian","石牌":"Shipai","明德":"Mingde","芝山":"Zhishan","士林":"Shilin","劍潭":"Jiantan","圓山":"Yuanshan","民權西路":"Minquan W. Rd","雙連":"Shuanglian","中山":"Zhongshan","台大醫院":"NTU Hospital","中正紀念堂":"Chiang Kai-shek Memorial Hall","東門":"Dongmen","大安森林公園":"Daan Park","大安":"Daan","信義安和":"Xinyi Anhe","台北101/世貿":"Taipei 101/World Trade Center","象山":"Xiangshan",
+        "新店":"Xindian","新店區公所":"Xindian District Office","七張":"Qizhang","大坪林":"Dapinglin","景美":"Jingmei","萬隆":"Wanlong","公館":"Gongguan","台電大樓":"Taipower Building","古亭":"Guting","小南門":"Xiaonanmen","北門":"Beimen","松江南京":"Songjiang Nanjing","南京復興":"Nanjing Fuxing","台北小巨蛋":"Taipei Arena","南京三民":"Nanjing Sanmin","松山":"Songshan",
+        "南勢角":"Nanshijiao","景安":"Jingan","永安市場":"Yongan Market","頂溪":"Dingxi","行天宮":"Xingtian Temple","中山國小":"Zhongshan Elementary School","大橋頭":"Daqiaotou","台北橋":"Taipei Bridge","菜寮":"Cailiao","三重":"Sanchong","先嗇宮":"Xianse Temple","頭前庄":"Touqianzhuang","新莊":"Xinzhuang","輔大":"Fu Jen University","丹鳳":"Danfeng","迴龍":"Huilong","三重國小":"Sanchong Elementary","三和國中":"Sanhe Junior High","徐匯中學":"St. Ignatius High School","三民高中":"Sanmin Senior High","蘆洲":"Luzhou",
+        "動物園":"Taipei Zoo","木柵":"Muzha","萬芳社區":"Wanfang Community","萬芳醫院":"Wanfang Hospital","辛亥":"Xinhai","麟光":"Linguang","六張犁":"Liuzhangli","科技大樓":"Technology Building","中山國中":"Zhongshan Junior High","松山機場":"Songshan Airport","大直":"Dazhi","劍南路":"Jiannan Rd","西湖":"Xihu","港墘":"Gangqian","文德":"Wende","內湖":"Neihu","大湖公園":"Dahu Park","葫洲":"Huzhou","東湖":"Donghu","南港軟體園區":"Nangang Software Park",
+        "十四張":"Shisizhang","秀朗橋":"Xiulang Bridge","景平":"Jingping","橋和":"Qiaohe","中原":"Zhongyuan","板新":"Banxin","新埔民生":"Xinpu Minsheng","幸福":"Xingfu","新北產業園區":"New Taipei Industrial Park"
+    };
+    function getDisp(name, lang) { return (lang==='en' && stationEn[name]) ? stationEn[name] : name; }
+
+    // ---------- 最短路徑 (Dijkstra) ----------
+    let graph = new Map();
+    function buildGraph() {
+        graph.clear();
+        const addEdge = (a,b,w) => { if(!graph.has(a)) graph.set(a,[]); if(!graph.has(b)) graph.set(b,[]); graph.get(a).push({node:b,weight:w}); graph.get(b).push({node:a,weight:w}); };
+        Object.values(mrtLines).forEach(line => {
+            for(let i=0;i<line.stations.length-1;i++) {
+                let s1=line.stations[i], s2=line.stations[i+1];
+                if(coords[s1] && coords[s2]) {
+                    let dx = coords[s1][0]-coords[s2][0], dy = coords[s1][1]-coords[s2][1];
+                    let km = Math.sqrt(dx*dx+dy*dy)*0.16;
+                    if(km<0.3) km=0.5;
+                    addEdge(s1,s2,km);
+                }
+            }
+        });
+    }
+    function dijkstra(start,end) {
+        if(!graph.has(start)||!graph.has(end)) return Infinity;
+        let dist=new Map(), pq=[{node:start,val:0}];
+        for(let n of graph.keys()) dist.set(n,Infinity);
+        dist.set(start,0);
+        while(pq.length){
+            pq.sort((a,b)=>a.val-b.val);
+            let {node:cur,val:curD}=pq.shift();
+            if(cur===end) break;
+            if(curD>dist.get(cur)) continue;
+            for(let nb of graph.get(cur)){
+                let nd=curD+nb.weight;
+                if(nd<dist.get(nb.node)){ dist.set(nb.node,nd); pq.push({node:nb.node,val:nd}); }
+            }
+        }
+        return dist.get(end);
+    }
+    function calcFare(km){ if(!isFinite(km)) return null; if(km<=5) return 20; let fare=20+Math.ceil((km-5)/3)*5; return Math.min(fare,65); }
+    function calcTime(km){ if(!isFinite(km)) return null; return Math.round(km*2.2+3); }
+
+    // ---------- UI 控制 ----------
+    let currentLang = 'zh';
+    const i18n = {
+        zh: { mapTitle:"台北捷運路線圖", mapSub:"🖱️ 左鍵起點 · 右鍵終點", stationTitle:"📍 站點設定", startLabel:"🚉 起站", destLabel:"🏁 迄站", lineDefault:"-- 依路線篩選目的地 --", destPlaceholder:"-- 請先選路線 --", fareTitle:"💰 票價 & 乘車資訊", fullLabel:"全票票價", discLabel:"優待票價", timeLabel:"預估乘車時間", detailTitle:"📐 路徑詳情", distTh:"實際路線距離", distUnit:"公里", startTh:"起點站", destTh:"終點站", footer:"💡 點擊地圖圓點：左鍵起點／右鍵終點 | 自動最短路徑", startEmpty:"未選擇", destEmpty:"未選擇" },
+        en: { mapTitle:"Taipei MRT Map", mapSub:"🖱️ Left: Origin · Right: Destination", stationTitle:"📍 Station Settings", startLabel:"🚉 Origin", destLabel:"🏁 Destination", lineDefault:"-- Filter by Line --", destPlaceholder:"-- Select Station --", fareTitle:"💰 Fare & Travel Time", fullLabel:"Standard Fare", discLabel:"Concession Fare", timeLabel:"Est. Travel Time", detailTitle:"📐 Route Details", distTh:"Distance", distUnit:"km", startTh:"Origin", destTh:"Destination", footer:"💡 Click dot: Left=Origin / Right=Destination · Shortest path", startEmpty:"Not set", destEmpty:"Not set" }
+    };
+    function applyLanguage() {
+        let t = i18n[currentLang];
+        document.getElementById("map-title").innerText = t.mapTitle;
+        document.getElementById("map-sub").innerText = t.mapSub;
+        document.getElementById("station-title").innerText = t.stationTitle;
+        document.getElementById("start-label").innerHTML = t.startLabel;
+        document.getElementById("dest-label").innerHTML = t.destLabel;
+        document.getElementById("line-default").innerText = t.lineDefault;
+        document.getElementById("dest-placeholder").innerText = t.destPlaceholder;
+        document.getElementById("fare-title").innerText = t.fareTitle;
+        document.getElementById("full-label").innerText = t.fullLabel;
+        document.getElementById("disc-label").innerText = t.discLabel;
+        document.getElementById("time-label").innerText = t.timeLabel;
+        document.getElementById("detail-title").innerText = t.detailTitle;
+        document.getElementById("dist-th").innerText = t.distTh;
+        document.getElementById("dist-unit").innerText = t.distUnit;
+        document.getElementById("start-th").innerText = t.startTh;
+        document.getElementById("dest-th").innerText = t.destTh;
+        document.getElementById("footer-text").innerText = t.footer;
+        // 更新線路下拉選單
+        let lineOpts = document.querySelectorAll("#line-select option");
+        if(lineOpts.length>1){
+            if(currentLang==='en'){
+                lineOpts[1].innerText="BL: Banqiao-Nangang Line"; lineOpts[2].innerText="R: Tamsui-Xinyi Line";
+                lineOpts[3].innerText="G: Songshan-Xindian Line"; lineOpts[4].innerText="O: Zhonghe-Xinlu Line";
+                lineOpts[5].innerText="BR: Wenhu Line"; lineOpts[6].innerText="Y: Circular Line";
+            } else {
+                lineOpts[1].innerText="板南線"; lineOpts[2].innerText="淡水信義線"; lineOpts[3].innerText="松山新店線";
+                lineOpts[4].innerText="中和新蘆線"; lineOpts[5].innerText="文湖線"; lineOpts[6].innerText="環狀線";
+            }
+        }
+        updateMapLabels();
+        populateDestDropdown();
+        refreshStationDisplay();
+        calculate();
+    }
+    function updateMapLabels() {
+        let labels = document.querySelectorAll("#mrt-svg .station-label");
+        labels.forEach(lbl => {
+            let chn = lbl.getAttribute("data-original");
+            if(!chn) { chn = lbl.textContent; lbl.setAttribute("data-original", chn); }
+            lbl.textContent = getDisp(chn, currentLang);
+        });
+    }
+    function refreshStationDisplay() {
+        let startRaw = document.getElementById('start-search').value;
+        let destRaw = document.getElementById('dest-search').value;
+        document.getElementById('info-start').innerText = startRaw ? getDisp(startRaw, currentLang) : i18n[currentLang].startEmpty;
+        document.getElementById('info-dest').innerText = destRaw ? getDisp(destRaw, currentLang) : i18n[currentLang].destEmpty;
+        document.getElementById('start-search').placeholder = currentLang==='zh'?"站名 / 點擊地圖":"Station / Click map";
+        document.getElementById('dest-search').placeholder = currentLang==='zh'?"站名 / 右鍵地圖":"Station / Right-click map";
+        let datalist = document.getElementById('all-stations');
+        for(let opt of datalist.options) opt.textContent = getDisp(opt.value, currentLang);
+    }
+    function populateDestDropdown() {
+        let line = document.getElementById('line-select').value;
+        let destSelect = document.getElementById('dest-select');
+        destSelect.innerHTML = `<option value="" id="dest-placeholder">${i18n[currentLang].destPlaceholder}</option>`;
+        if(line && mrtLines[line]){
+            mrtLines[line].stations.forEach(s => {
+                let opt = document.createElement('option');
+                opt.value = s;
+                opt.textContent = getDisp(s, currentLang);
+                destSelect.appendChild(opt);
+            });
+        }
+        let curDest = document.getElementById('dest-search').value;
+        if(curDest && [...destSelect.options].some(o=>o.value===curDest)) destSelect.value = curDest;
+    }
+    function syncDestFromDropdown() {
+        let val = document.getElementById('dest-select').value;
+        if(val) { document.getElementById('dest-search').value = val; calculate(); }
+    }
+    function selectStation(name, type) {
+        if(!coords[name]) return;
+        if(type==='start') document.getElementById('start-search').value = name;
+        else {
+            document.getElementById('dest-search').value = name;
+            for(let [lineId,line] of Object.entries(mrtLines)){
+                if(line.stations.includes(name)){
+                    document.getElementById('line-select').value = lineId;
+                    populateDestDropdown();
+                    break;
+                }
+            }
+        }
+        calculate();
+    }
+    function swapStations() {
+        let s = document.getElementById('start-search').value;
+        let d = document.getElementById('dest-search').value;
+        document.getElementById('start-search').value = d;
+        document.getElementById('dest-search').value = s;
+        if(s && coords[s]){
+            for(let [lineId,line] of Object.entries(mrtLines))
+                if(line.stations.includes(s)){ document.getElementById('line-select').value = lineId; break; }
+        } else document.getElementById('line-select').value = "";
+        populateDestDropdown();
+        calculate();
+    }
+    function calculate() {
+        let start = document.getElementById('start-search').value.trim();
+        let dest = document.getElementById('dest-search').value.trim();
+        let validS = !!coords[start], validD = !!coords[dest];
+        refreshStationDisplay();
+        if(!validS || !validD || start===dest){
+            if(start===dest && start){
+                document.getElementById('val-full').innerText = "NT$ 20";
+                document.getElementById('val-disc').innerText = "NT$ 8";
+                document.getElementById('val-time').innerHTML = "0 <small>min</small>";
+                document.getElementById('val-dist').innerText = "0.00";
+            } else {
+                document.getElementById('val-full').innerText = "--";
+                document.getElementById('val-disc').innerText = "--";
+                document.getElementById('val-time').innerHTML = "--";
+                document.getElementById('val-dist').innerText = "--";
+            }
+            updateHighlight();
+            return;
+        }
+        let dist = dijkstra(start,dest);
+        if(dist===Infinity) { document.getElementById('val-dist').innerText = "error"; return; }
+        let fare = calcFare(dist), disc = fare?Math.ceil(fare*0.4):null, time = calcTime(dist);
+        document.getElementById('val-dist').innerText = dist.toFixed(2);
+        if(fare) document.getElementById('val-full').innerHTML = `NT$ ${fare}`;
+        if(disc) document.getElementById('val-disc').innerHTML = `NT$ ${disc}`;
+        if(time) document.getElementById('val-time').innerHTML = `${time} <small>min</small>`;
+        updateHighlight();
+    }
+    function updateHighlight() {
+        let start = document.getElementById('start-search').value;
+        let dest = document.getElementById('dest-search').value;
+        document.querySelectorAll('.station-dot').forEach(dot => {
+            let name = dot.getAttribute('data-id');
+            if(name===start) { dot.setAttribute('fill','#0070BD'); dot.setAttribute('r',3.8); }
+            else if(name===dest) { dot.setAttribute('fill','#E3002C'); dot.setAttribute('r',3.8); }
+            else { dot.setAttribute('fill','#ffffff'); dot.setAttribute('r',2.5); }
+        });
+    }
+    // 繪製 SVG 地圖
+    function initSvg() {
+        const svg = document.getElementById('mrt-svg');
+        svg.innerHTML = '';
+        Object.values(mrtLines).forEach(line => {
+            let d = "";
+            line.stations.forEach((s,i) => {
+                if(coords[s]) {
+                    let [x,y] = coords[s];
+                    d += (i===0) ? `M ${x} ${y}` : ` L ${x} ${y}`;
+                }
+            });
+            if(d) {
+                let path = document.createElementNS("http://www.w3.org/2000/svg","path");
+                path.setAttribute("d", d); path.setAttribute("class","route-line"); path.setAttribute("stroke", line.color);
+                svg.appendChild(path);
+            }
+        });
+        Object.keys(coords).forEach(name => {
+            let [x,y] = coords[name];
+            let dot = document.createElementNS("http://www.w3.org/2000/svg","circle");
+            dot.setAttribute("cx",x); dot.setAttribute("cy",y); dot.setAttribute("r",2.5);
+            dot.setAttribute("fill","#ffffff"); dot.setAttribute("stroke","#4a627a");
+            dot.setAttribute("class","station-dot"); dot.setAttribute("data-id",name);
+            dot.onclick = (e) => { e.stopPropagation(); selectStation(name,'start'); };
+            dot.oncontextmenu = (e) => { e.preventDefault(); e.stopPropagation(); selectStation(name,'dest'); return false; };
+            svg.appendChild(dot);
+            let text = document.createElementNS("http://www.w3.org/2000/svg","text");
+            text.setAttribute("x", x+2.8); text.setAttribute("y", y+2.2);
+            text.setAttribute("transform", `rotate(-35, ${x}, ${y})`);
+            text.setAttribute("class","station-label");
+            text.setAttribute("data-original", name);
+            text.textContent = name;
+            svg.appendChild(text);
+        });
+    }
+    // 啟動
+    window.onload = () => {
+        buildGraph();
+        initSvg();
+        const datalist = document.getElementById('all-stations');
+        Object.keys(coords).forEach(s => { let opt = document.createElement('option'); opt.value = s; datalist.appendChild(opt); });
+        document.getElementById('start-search').addEventListener('input', calculate);
+        document.getElementById('dest-search').addEventListener('input', calculate);
+        document.getElementById('swap-btn').addEventListener('click', swapStations);
+        document.getElementById('line-select').addEventListener('change', () => { populateDestDropdown(); calculate(); });
+        document.getElementById('dest-select').addEventListener('change', syncDestFromDropdown);
+        document.getElementById('btn-zh').addEventListener('click', () => { currentLang='zh'; document.querySelector('.lang-btn.active').classList.remove('active'); document.getElementById('btn-zh').classList.add('active'); applyLanguage(); });
+        document.getElementById('btn-en').addEventListener('click', () => { currentLang='en'; document.querySelector('.lang-btn.active').classList.remove('active'); document.getElementById('btn-en').classList.add('active'); applyLanguage(); });
+        applyLanguage();
+        calculate();
+    };
+</script>
+</body>
+</html>
